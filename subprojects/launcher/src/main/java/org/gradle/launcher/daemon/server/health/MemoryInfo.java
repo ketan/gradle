@@ -19,8 +19,8 @@ package org.gradle.launcher.daemon.server.health;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 
-class MemoryInfo {
 
+class MemoryInfo {
     private final long totalMemory; //this does not change
 
     MemoryInfo() {
