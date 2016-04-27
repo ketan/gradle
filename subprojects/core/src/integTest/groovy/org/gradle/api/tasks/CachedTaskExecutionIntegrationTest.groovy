@@ -128,7 +128,7 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec {
 
         when:
         file("lib.jar").bytes = jarWithContents(["test.txt": "original contents"])
-        println "Hash: " + Hashing.md5().hashBytes(file("lib.jar").bytes)
+        println ">>> Hash of original lib.jar: " + Hashing.md5().hashBytes(file("lib.jar").bytes)
         succeedsWithCache "assemble"
 
         then:
@@ -143,7 +143,11 @@ class CachedTaskExecutionIntegrationTest extends AbstractIntegrationSpec {
 
         when:
         file("lib.jar").bytes = jarWithContents(["test.txt": "modified contents"])
-        println "Hash: " + Hashing.md5().hashBytes(file("lib.jar").bytes)
+        println ">>> Hash of modified lib.jar: " + Hashing.md5().hashBytes(file("lib.jar").bytes)
+
+        // File system may not see change without this wait
+        Thread.sleep(1000L);
+
         succeedsWithCache "assemble"
 
         then:
