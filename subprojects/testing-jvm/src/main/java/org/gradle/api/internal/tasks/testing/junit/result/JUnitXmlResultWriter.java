@@ -24,6 +24,7 @@ import org.gradle.internal.UncheckedException;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Map;
 
 public class JUnitXmlResultWriter {
 
@@ -57,6 +58,14 @@ public class JUnitXmlResultWriter {
                     .attribute("time", String.valueOf(result.getDuration() / 1000.0));
 
             writer.startElement("properties");
+            Map<Object, Object> systemProperties = System.getProperties();
+
+            for (Map.Entry<Object, Object> entry : systemProperties.entrySet()) {
+                writer.startElement("property")
+                        .attribute("name", String.valueOf(entry.getKey()))
+                        .attribute("value", String.valueOf(entry.getValue()));
+                writer.endElement();
+            }
             writer.endElement();
 
             writeTests(writer, result.getResults(), className, classId);

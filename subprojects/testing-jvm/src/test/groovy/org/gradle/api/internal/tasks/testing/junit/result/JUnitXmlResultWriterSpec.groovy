@@ -21,6 +21,7 @@ import org.gradle.api.internal.tasks.testing.results.DefaultTestResult
 import org.gradle.integtests.fixtures.JUnitTestClassExecutionResult
 import org.gradle.integtests.fixtures.TestResultOutputAssociation
 import org.gradle.internal.SystemProperties
+import org.gradle.internal.xml.XmlValidation
 import spock.lang.Specification
 
 import static TestOutputAssociation.WITH_SUITE
@@ -35,6 +36,7 @@ class JUnitXmlResultWriterSpec extends Specification {
 
     private provider = Mock(TestResultsProvider)
     private mode = WITH_SUITE
+    private static final String LINE_SEPARATOR = SystemProperties.getInstance().getLineSeparator();
 
     protected JUnitXmlResultWriter getGenerator() {
         new JUnitXmlResultWriter("localhost", provider, mode)
@@ -69,7 +71,7 @@ class JUnitXmlResultWriterSpec extends Specification {
         and:
         xml == """<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="com.foo.FooTest" tests="4" skipped="1" failures="1" errors="0" timestamp="2012-11-19T17:09:28" hostname="localhost" time="0.045">
-  <properties/>
+${systemPropertiesXML()}
   <testcase name="some test" classname="com.foo.FooTest" time="0.015"/>
   <testcase name="some test two" classname="com.foo.FooTest" time="0.015"/>
   <testcase name="some failing test" classname="com.foo.FooTest" time="0.01">
@@ -97,7 +99,7 @@ class JUnitXmlResultWriterSpec extends Specification {
         then:
         xml == """<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="com.foo.FooTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2012-11-19T17:09:28" hostname="localhost" time="0.3">
-  <properties/>
+${systemPropertiesXML()}
   <testcase name="some test" classname="com.foo.FooTest" time="0.2"/>
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
@@ -131,7 +133,7 @@ class JUnitXmlResultWriterSpec extends Specification {
         then:
         xml == """<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="com.foo.IgnoredTest" tests="0" skipped="0" failures="0" errors="0" timestamp="2012-11-19T17:09:28" hostname="localhost" time="0.0">
-  <properties/>
+${systemPropertiesXML()}
   <system-out><![CDATA[]]></system-out>
   <system-err><![CDATA[]]></system-err>
 </testsuite>
@@ -165,7 +167,7 @@ class JUnitXmlResultWriterSpec extends Specification {
         then:
         getXml(testClass) == """<?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="com.Foo" tests="2" skipped="0" failures="0" errors="0" timestamp="1970-01-01T00:00:00" hostname="localhost" time="1.0">
-  <properties/>
+${systemPropertiesXML()}
   <testcase name="m1" classname="com.Foo" time="0.1">
     <system-out><![CDATA[ m1-out-1 m1-out-2]]></system-out>
     <system-err><![CDATA[ m1-err-1 m1-err-2]]></system-err>
@@ -184,5 +186,71 @@ class JUnitXmlResultWriterSpec extends Specification {
         def text = new ByteArrayOutputStream()
         generator.write(result, text)
         return text.toString("UTF-8").replace(SystemProperties.instance.lineSeparator, "\n")
+    }
+
+    def systemPropertiesXML() {
+        Map<Object, Object> systemProperties = System.getProperties()
+
+        def propertiesXML = "  <properties>${LINE_SEPARATOR}"
+        systemProperties.each { key, value ->
+            def encodedKey = writeXmlAttributeEncoded(String.valueOf(key))
+            def encodedValue = writeXmlAttributeEncoded(String.valueOf(value))
+            propertiesXML += """    <property name="${ encodedKey}" value="${ encodedValue}"/>${LINE_SEPARATOR}"""
+        }
+        propertiesXML += "  </properties>"
+
+        return propertiesXML
+    }
+
+    private String writeXmlAttributeEncoded(CharSequence message) throws IOException {
+        assert message != null;
+        int len = message.length();
+        String result = ""
+        for (int i = 0; i < len; i++) {
+            result += writeXmlAttributeEncoded(message.charAt(i));
+        }
+        return result;
+    }
+
+    private String writeXmlAttributeEncoded(char ch) throws IOException {
+        if (ch == 9) {
+            return "&#9;";
+        } else if (ch == 10) {
+            return "&#10;";
+        } else if (ch == 13) {
+            return "&#13;";
+        } else {
+            return writeXmlEncoded(ch);
+        }
+    }
+
+    private void writeXmlEncoded(CharSequence message) throws IOException {
+        assert message != null;
+        int len = message.length();
+        for (int i = 0; i < len; i++) {
+            writeXmlEncoded(message.charAt(i));
+        }
+    }
+
+    private String writeXmlEncoded(char ch) throws IOException {
+        if (ch == '<') {
+            return "&lt;";
+        } else if (ch == '>') {
+            return "&gt;";
+        } else if (ch == '&') {
+            return "&amp;";
+        } else if (ch == '"') {
+            return "&quot;";
+        } else if (!XmlValidation.isLegalCharacter(ch)) {
+            return "?";
+        } else if (XmlValidation.isRestrictedCharacter(ch)) {
+            return writeCharacterReference(ch);
+        } else {
+            return ch;
+        }
+    }
+
+    private String writeCharacterReference(char ch) throws IOException {
+        return "&#x" + Integer.toHexString(ch) + ";";
     }
 }
